@@ -1,13 +1,12 @@
-```python
 import streamlit as st
 import pdfplumber
 import requests
 from fpdf import FPDF
 import datetime
 
-# =====================================
+# =========================
 # PAGE CONFIG
-# =====================================
+# =========================
 
 st.set_page_config(
     page_title="ResumeAI Pro",
@@ -15,95 +14,68 @@ st.set_page_config(
     layout="wide"
 )
 
-# =====================================
+# =========================
 # SIDEBAR
-# =====================================
+# =========================
 
 with st.sidebar:
-
     st.title("🚀 ResumeAI Pro")
 
     st.markdown("---")
 
     st.subheader("Features")
-
     st.write("✅ Resume Analysis")
-    st.write("✅ ATS Suggestions")
-    st.write("✅ Job Match Review")
-    st.write("✅ PDF Report Export")
+    st.write("✅ ATS Scoring")
+    st.write("✅ Job Matching")
+    st.write("✅ PDF Reports")
 
     st.markdown("---")
 
     st.subheader("About")
-
-    st.write(
-        "AI-powered resume analysis tool built using "
-        "Streamlit + Groq AI."
-    )
+    st.write("AI Resume Analyzer built with Streamlit + Groq AI")
 
     st.markdown("---")
 
     st.caption("Version 1.0")
 
-# =====================================
+# =========================
 # HEADER
-# =====================================
+# =========================
 
 st.title("🚀 ResumeAI Pro")
 
-st.markdown(
-    """
-### AI-Powered Resume Analysis & ATS Optimization
+st.markdown("### AI Resume Analyzer & ATS Optimizer")
 
-Upload your resume and receive:
+st.info("Upload your resume and optionally add a job description for better results.")
 
-- ATS Resume Score
-- Job Match Percentage
-- Strengths & Weaknesses
-- Improvement Suggestions
-- Downloadable PDF Report
-"""
-)
+# =========================
+# EXTRACT TEXT
+# =========================
 
-st.info(
-    "Upload your resume PDF and optionally paste a job description for a more accurate analysis."
-)
-
-# =====================================
-# PDF TEXT EXTRACTION
-# =====================================
-
-def extract_text(uploaded_file):
-
+def extract_text(file):
     text = ""
-
-    with pdfplumber.open(uploaded_file) as pdf:
-
+    with pdfplumber.open(file) as pdf:
         for page in pdf.pages:
-
             page_text = page.extract_text()
-
             if page_text:
                 text += page_text + "\n"
-
     return text
 
-# =====================================
-# AI ANALYSIS
-# =====================================
+# =========================
+# AI FUNCTION (GROQ)
+# =========================
 
 def analyze_resume(resume_text, job_desc):
 
     try:
         api_key = st.secrets["GROQ_API_KEY"]
-
     except:
-        return "❌ GROQ_API_KEY not found in Streamlit Secrets."
+        return "ERROR: Missing GROQ_API_KEY in Streamlit Secrets"
 
     prompt = f"""
-You are an expert HR consultant.
+You are an expert HR AI.
 
-Analyze this resume professionally.
+Analyze this resume:
 
 RESUME:
 {resume_text}
@@ -111,23 +83,20 @@ RESUME:
 JOB DESCRIPTION:
 {job_desc}
 
-Provide exactly:
+Return:
 
 Resume Score: X/100
 
 Job Match: X%
 
 Strengths:
-- item
-- item
+- point
 
 Weaknesses:
-- item
-- item
+- point
 
 Improvements:
-- item
-- item
+- point
 """
 
     url = "https://api.groq.com/openai/v1/chat/completions"
@@ -149,167 +118,95 @@ Improvements:
     }
 
     try:
-
-        response = requests.post(
-            url,
-            headers=headers,
-            json=payload,
-            timeout=60
-        )
+        response = requests.post(url, headers=headers, json=payload, timeout=60)
 
         if response.status_code != 200:
+            return f"API ERROR {response.status_code}: {response.text}"
 
-            return f"""
-API Error
-
-Status Code: {response.status_code}
-
-{response.text}
-"""
-
-        result = response.json()
-
-        return result["choices"][0]["message"]["content"]
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
 
     except Exception as e:
+        return f"ERROR: {str(e)}"
 
-        return f"Error: {str(e)}"
-
-# =====================================
+# =========================
 # PDF GENERATOR
-# =====================================
+# =========================
 
-def create_pdf(report_text):
-
+def create_pdf(text):
     pdf = FPDF()
-
     pdf.add_page()
 
-    pdf.set_font("Arial", "B", 18)
-
-    pdf.cell(
-        0,
-        12,
-        "ResumeAI Pro Analysis Report",
-        ln=True,
-        align="C"
-    )
+    pdf.set_font("Arial", "B", 16)
+    pdf.cell(0, 10, "ResumeAI Pro Report", ln=True, align="C")
 
     pdf.ln(5)
 
     pdf.set_font("Arial", "", 11)
+    pdf.cell(0, 10, f"Generated: {datetime.date.today()}", ln=True)
 
-    pdf.cell(
-        0,
-        8,
-        f"Generated: {datetime.date.today()}",
-        ln=True,
-        align="C"
-    )
+    pdf.ln(5)
 
-    pdf.ln(10)
+    for line in text.split("\n"):
+        pdf.multi_cell(0, 7, line)
 
-    pdf.set_font("Arial", "", 11)
-
-    for line in report_text.split("\n"):
-
-        pdf.multi_cell(
-            0,
-            7,
-            line
-        )
-
-    file_name = "ResumeAI_Report.pdf"
-
+    file_name = "resume_report.pdf"
     pdf.output(file_name)
 
     return file_name
 
-# =====================================
-# INPUTS
-# =====================================
+# =========================
+# UI INPUTS
+# =========================
 
-uploaded_file = st.file_uploader(
-    "📄 Upload Resume PDF",
-    type=["pdf"]
-)
+uploaded_file = st.file_uploader("Upload Resume (PDF)", type=["pdf"])
+job_desc = st.text_area("Paste Job Description (Optional)", height=150)
 
-job_desc = st.text_area(
-    "💼 Paste Job Description (Optional)",
-    height=180
-)
-
-# =====================================
-# PROCESSING
-# =====================================
+# =========================
+# MAIN LOGIC
+# =========================
 
 if uploaded_file:
 
     resume_text = extract_text(uploaded_file)
 
-    st.subheader("📄 Resume Preview")
+    st.subheader("Resume Preview")
+    st.text_area("Extracted Text", resume_text, height=250)
 
-    st.text_area(
-        "Extracted Resume Text",
-        resume_text,
-        height=250
-    )
+    if st.button("Analyze Resume"):
 
-    if st.button("🚀 Analyze Resume"):
+        with st.spinner("Analyzing..."):
+            result = analyze_resume(resume_text, job_desc)
 
-        with st.spinner("Analyzing resume..."):
-
-            report = analyze_resume(
-                resume_text,
-                job_desc
-            )
-
-        st.success("✅ Analysis Completed")
+        st.success("Analysis Complete")
 
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.metric(
-                "Status",
-                "Analyzed"
-            )
+            st.metric("Status", "Done")
 
         with col2:
-            st.metric(
-                "AI Engine",
-                "Groq"
-            )
+            st.metric("Engine", "Groq AI")
 
         with col3:
-            st.metric(
-                "Report",
-                "Ready"
-            )
+            st.metric("Output", "Ready")
 
-        st.markdown("---")
+        st.subheader("AI Report")
+        st.write(result)
 
-        st.subheader("📊 Analysis Report")
+        pdf_file = create_pdf(result)
 
-        st.write(report)
-
-        pdf_file = create_pdf(report)
-
-        with open(pdf_file, "rb") as file:
-
+        with open(pdf_file, "rb") as f:
             st.download_button(
-                label="⬇ Download PDF Report",
-                data=file,
+                "Download PDF Report",
+                f,
                 file_name="ResumeAI_Report.pdf",
                 mime="application/pdf"
             )
 
-# =====================================
+# =========================
 # FOOTER
-# =====================================
+# =========================
 
 st.markdown("---")
-
-st.caption(
-    "Built by Practical AI Builder | Streamlit + Groq AI"
-)
-```
+st.caption("Built with Streamlit + Groq AI 🚀")
